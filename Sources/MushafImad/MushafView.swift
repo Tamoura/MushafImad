@@ -83,6 +83,10 @@ public struct MushafView: View {
 #if canImport(UIKit)
     @StateObject private var tiltManager = TiltScrollManager()
 #endif
+    @StateObject private var eyeTrackingManager = EyeTrackingManager()
+    @StateObject private var gazeTracker = GazeProgressTracker()
+    @AppStorage("eye_tracking_enabled") private var eyeTrackingEnabled: Bool = false
+    @AppStorage("eye_tracking_auto_page") private var eyeTrackingAutoPage: Bool = false
     @AppStorage("reading_theme") private var readingTheme: ReadingTheme = .white
     @AppStorage("scrolling_mode") private var scrollingMode: ScrollingMode = .horizontal
     @AppStorage("display_mode") private var displayMode: DisplayMode = .text
@@ -132,6 +136,14 @@ public struct MushafView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay {
+            if eyeTrackingEnabled {
+                EyeTrackingOverlayView(
+                    eyeTrackingManager: eyeTrackingManager,
+                    gazeTracker: gazeTracker
+                )
+            }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.selectedVerse?.verseID)
         .sheet(isPresented: $viewModel.showTafsir) {
             if let verse = viewModel.tafsirVerse {
@@ -148,6 +160,10 @@ public struct MushafView: View {
             guard let newPage = newPage else { return }
             Task {
                 await viewModel.handlePageChange(from: oldPage, to: newPage)
+            }
+            // Update gaze tracker for the new page
+            if let oldPage = oldPage {
+                gazeTracker.handlePageChange(from: oldPage, to: newPage)
             }
         }
         .task {
@@ -208,11 +224,13 @@ public struct MushafView: View {
 #if canImport(UIKit)
             tiltManager.activate()
 #endif
+            setupEyeTracking()
         }
         .onDisappear {
 #if canImport(UIKit)
             tiltManager.deactivate()
 #endif
+            eyeTrackingManager.deactivate()
         }
     }
     // MARK: - Verse Action Bar
@@ -280,6 +298,39 @@ public struct MushafView: View {
         } label: {
             Image(systemName: displayMode == .image ? "text.justify.leading" : "book.pages")
         }
+    }
+
+    // MARK: - Eye Tracking Setup
+
+    private func setupEyeTracking() {
+        // Configure gaze tracker callbacks
+        gazeTracker.autoPageDwellThreshold = eyeTrackingManager.dwellTimeSeconds
+
+        eyeTrackingManager.onGazeUpdate = { [gazeTracker, viewModel] gaze in
+            gazeTracker.processGaze(gaze, pageNumber: viewModel.currentPage)
+        }
+
+        gazeTracker.onAutoAdvance = { [viewModel] in
+            guard eyeTrackingAutoPage else { return }
+            withAnimation {
+                viewModel.nextPage()
+                if let next = viewModel.scrollPosition.map({ $0 + 1 }), next <= 604 {
+                    viewModel.scrollPosition = next
+                }
+            }
+        }
+
+        gazeTracker.onPageRead = { pageNumber in
+            // Reading progress is tracked; consumers can save to SwiftData here
+        }
+
+        // Enable fallback mode if ARKit isn't supported
+        if !eyeTrackingManager.isSupported {
+            gazeTracker.useFallbackMode = true
+        }
+
+        // Activate with a default screen size; will be updated by GeometryReader
+        eyeTrackingManager.activate(screenSize: CGSize(width: 390, height: 844))
     }
 
     @ViewBuilder

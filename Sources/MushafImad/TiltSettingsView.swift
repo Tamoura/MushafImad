@@ -17,7 +17,7 @@ public struct TiltSettingsView: View {
         Form {
             Section(header: Text("Tilt to Scroll")) {
                 Toggle("Enable Tilt Scrolling", isOn: $isEnabled)
-                
+
                 if isEnabled {
                     VStack(alignment: .leading) {
                         Text("Sensitivity")
@@ -30,10 +30,27 @@ public struct TiltSettingsView: View {
                         }
                     }
                 }
-                
+
                 Text("Tilt your device forward or backward to scroll automatically. Return to a neutral reading angle (~25°) to stop.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section(header: Text("Eye Tracking (Exploratory)")) {
+                NavigationLink {
+                    EyeTrackingSettingsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "eye")
+                            .foregroundStyle(.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Eye-Tracking Reading Progress")
+                            Text("Detect which verse you're reading using gaze estimation")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
         }
         .navigationTitle("Scroll Settings")
